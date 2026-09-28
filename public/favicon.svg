@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Flora">
+  <rect width="64" height="64" rx="14" fill="#1f6b45"/>
+  <g fill="#f4f0e8">
+    <path d="M30 46h4v-10c0-4 2-7 4-9-2 3-4 6-4 9v10z"/>
+    <path d="M22 30c-6 2-10 8-10 14 0 2 1 4 3 4 5 0 9-5 11-10-1-5-2-7-4-8z"/>
+    <path d="M42 30c6 2 10 8 10 14 0 2-1 4-3 4-5 0-9-5-11-10 1-5 2-7 4-8z"/>
+  </g>
+</svg>
