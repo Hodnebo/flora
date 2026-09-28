@@ -6,6 +6,7 @@ import {
   removeEntry,
   replaceEntryFood,
   replaceEntryWithCustomFood,
+  setLanguage,
   setTheme,
   updateCustomFood,
 } from "./log";
@@ -219,5 +220,24 @@ describe("setTheme", () => {
     expect(restored.settings.theme).toBe("dark");
     expect(setTheme(dark, "light").settings.theme).toBe("light");
     expect(dark.settings.theme).toBe("dark");
+  });
+});
+
+describe("setLanguage", () => {
+  it("round-trips the language without dropping logged data", () => {
+    const logged = must(
+      logCustomFood(emptyState(), "Nettle pesto", "other", WEEK, NOW, {
+        foodId: "custom:pesto00001",
+        entryId: "e1",
+      }),
+    );
+    const norwegian = setLanguage(logged, "nb");
+    expect(norwegian.settings.language).toBe("nb");
+    expect(norwegian.entries).toEqual(logged.entries);
+    expect(norwegian.customFoods).toEqual(logged.customFoods);
+    const restored = JSON.parse(JSON.stringify(norwegian)) as PersistedState;
+    expect(restored.settings.language).toBe("nb");
+    expect(setLanguage(norwegian, "en").settings.language).toBe("en");
+    expect(norwegian.settings.language).toBe("nb");
   });
 });

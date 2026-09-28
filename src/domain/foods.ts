@@ -1,5 +1,6 @@
+import { NB_NAMES } from "../catalog/nb";
 import { catalog, type CatalogFood } from "../catalog/foods";
-import type { Food } from "./types";
+import type { Food, LanguageSetting } from "./types";
 
 export function toCatalogFood(item: CatalogFood): Food {
   return {
@@ -13,6 +14,11 @@ export function toCatalogFood(item: CatalogFood): Food {
 
 export function catalogFoods(): Food[] {
   return catalog.map(toCatalogFood);
+}
+
+export function displayName(food: Food, language: LanguageSetting): string {
+  if (language !== "nb" || food.source !== "catalog") return food.canonicalName;
+  return NB_NAMES[food.id] ?? food.canonicalName;
 }
 
 export function foodMap(customFoods: readonly Food[]): Map<string, Food> {

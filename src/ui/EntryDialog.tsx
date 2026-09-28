@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { CATEGORY_LABEL, pointsForCategory, type Category } from "../domain/category";
+import { pointsForCategory, type Category } from "../domain/category";
 import { formatPoints } from "../domain/format";
 import { cleanName } from "../domain/log";
-import type { Entry, Food } from "../domain/types";
+import type { Entry, Food, LanguageSetting } from "../domain/types";
 import { CategoryChips } from "./AddPlantDialog";
+import type { Copy } from "./copy";
 import { actionMessage, type LogStatus } from "./useTracker";
 
 type EntryDialogProps = {
   open: boolean;
   entry: Entry | null;
   food: Food | null;
+  copy: Copy;
+  language: LanguageSetting;
+  nameOf: (food: Food) => string;
   onClose: () => void;
   onRemove: () => void;
   onReplace: () => void;
@@ -20,6 +24,9 @@ export function EntryDialog({
   open,
   entry,
   food,
+  copy,
+  language,
+  nameOf,
   onClose,
   onRemove,
   onReplace,
@@ -45,8 +52,8 @@ export function EntryDialog({
     };
   }, []);
 
-  const name = food?.canonicalName ?? "Unknown plant";
-  const loggedLabel = entry ? formatLoggedDate(entry.loggedAt) : null;
+  const name = food ? nameOf(food) : copy.unknownPlant;
+  const loggedLabel = entry ? formatLoggedDate(entry.loggedAt, copy, language) : null;
 
   return (
     <dialog
@@ -68,22 +75,28 @@ export function EntryDialog({
                 {loggedLabel ? <p className="sheet-sub">{loggedLabel}</p> : null}
               </div>
               <button type="button" className="text-btn" onClick={() => dialogRef.current?.close()}>
-                Close
+                {copy.close}
               </button>
             </div>
           </div>
           <div className="sheet-scroll">
             {food?.source === "custom" ? (
-              <CustomEditor key={food.id} food={food} onSave={onSaveCustom} onClose={onClose} />
+              <CustomEditor
+                key={food.id}
+                food={food}
+                copy={copy}
+                onSave={onSaveCustom}
+                onClose={onClose}
+              />
             ) : food ? (
-              <CatalogDetails food={food} />
+              <CatalogDetails food={food} copy={copy} />
             ) : null}
             <div className="entry-actions">
               <button type="button" className="secondary-btn" onClick={onReplace}>
-                Replace with another plant
+                {copy.replaceWithAnother}
               </button>
               <button type="button" className="danger-btn" onClick={onRemove}>
-                Remove from this week
+                {copy.removeFromWeek}
               </button>
             </div>
           </div>
@@ -93,25 +106,27 @@ export function EntryDialog({
   );
 }
 
-function CatalogDetails({ food }: { food: Food }) {
+function CatalogDetails({ food, copy }: { food: Food; copy: Copy }) {
   const points = formatPoints(pointsForCategory(food.category));
-  const unit = points === "1" ? "point" : "points";
+  const unit = points === "1" ? copy.point : copy.points;
   return (
     <div className="entry-details">
       <p className="entry-meta">
-        {CATEGORY_LABEL[food.category]} · {points} {unit}
+        {copy.category[food.category]} · {points} {unit}
       </p>
-      <p className="note">This plant keeps its category. Replace it if this is the wrong food.</p>
+      <p className="note">{copy.catalogNote}</p>
     </div>
   );
 }
 
 function CustomEditor({
   food,
+  copy,
   onSave,
   onClose,
 }: {
   food: Food;
+  copy: Copy;
   onSave: (patch: { name?: string; category?: Category }) => LogStatus;
   onClose: () => void;
 }) {
@@ -119,7 +134,7 @@ function CustomEditor({
   const [category, setCategory] = useState<Category>(food.category);
   const [error, setError] = useState<string | null>(null);
   const points = formatPoints(pointsForCategory(category));
-  const unit = points === "1" ? "point" : "points";
+  const unit = points === "1" ? copy.point : copy.points;
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -136,13 +151,13 @@ function CustomEditor({
       onClose();
       return;
     }
-    setError(actionMessage(status.error));
+    setError(actionMessage(status.error, copy));
   }
 
   return (
     <form onSubmit={onSubmit}>
       <label className="field" htmlFor="plant-name">
-        <span className="field-label">Name</span>
+        <span className="field-label">{copy.nameLabel}</span>
       </label>
       <input
         id="plant-name"
@@ -167,26 +182,26 @@ function CustomEditor({
       <p className="entry-meta points-line">
         {points} {unit}
       </p>
-      <CategoryChips pressed={category} onChoose={setCategory} />
+      <CategoryChips copy={copy} pressed={category} onChoose={setCategory} />
       <p id="plant-name-help" className="note">
-        Changing the category updates every week that includes this plant.
+        {copy.categoryUpdatesWeeks}
       </p>
       <button type="submit" className="primary-btn save-btn">
-        Save changes
+        {copy.saveChanges}
       </button>
     </form>
   );
 }
 
-function formatLoggedDate(iso: string): string | null {
+function formatLoggedDate(iso: string, copy: Copy, locale: LanguageSetting): string | null {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
-  const formatted = new Intl.DateTimeFormat(undefined, {
+  const formatted = new Intl.DateTimeFormat(locale, {
     weekday: "short",
     day: "numeric",
     month: "short",
   }).format(date);
-  return `Logged ${formatted}`;
+  return copy.loggedOn(formatted);
 }
 
 function onBackdropClick(event: MouseEvent<HTMLDialogElement>) {

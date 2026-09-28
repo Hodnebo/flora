@@ -125,6 +125,11 @@ button:disabled {
   gap: 12px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
 .wordmark {
   margin: 0;
   font-size: 1.85rem;

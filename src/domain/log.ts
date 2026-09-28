@@ -2,7 +2,15 @@ import type { Category } from "./category";
 import { catalogFoods, foodMap } from "./foods";
 import { isWeekKey } from "./isoWeek";
 import { findFoodByExactName } from "./search";
-import { err, ok, type Food, type PersistedState, type Result, type ThemeSetting } from "./types";
+import {
+  err,
+  ok,
+  type Food,
+  type LanguageSetting,
+  type PersistedState,
+  type Result,
+  type ThemeSetting,
+} from "./types";
 
 const MAX_NAME_LENGTH = 80;
 
@@ -154,6 +162,13 @@ export function setTheme(state: PersistedState, theme: ThemeSetting): PersistedS
   return {
     ...state,
     settings: { ...state.settings, theme },
+  };
+}
+
+export function setLanguage(state: PersistedState, language: LanguageSetting): PersistedState {
+  return {
+    ...state,
+    settings: { ...state.settings, language },
   };
 }
 

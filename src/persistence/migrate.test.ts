@@ -38,7 +38,7 @@ describe("migrate", () => {
       schemaVersion: 1,
       customFoods: [nettle],
       entries: [nettleEntry],
-      settings: { theme: "dark" },
+      settings: { theme: "dark", language: "en" },
     };
     expect(migrate(state)).toEqual({ ok: true, state });
   });
@@ -57,7 +57,7 @@ describe("migrate", () => {
         schemaVersion: 1,
         customFoods: [],
         entries: [],
-        settings: { theme: "light" },
+        settings: { theme: "light", language: "en" },
       },
     });
   });
@@ -257,6 +257,62 @@ describe("migrate", () => {
 
   it("fills a partial settings object with the system theme", () => {
     expect(migrate({ schemaVersion: 1, settings: { contrast: "high" } })).toEqual({
+      ok: true,
+      state: emptyState(),
+    });
+  });
+
+  it("defaults a missing language to en and keeps theme, foods, and entries", () => {
+    expect(
+      migrate({
+        schemaVersion: 1,
+        customFoods: [nettle],
+        entries: [nettleEntry],
+        settings: { theme: "dark" },
+      }),
+    ).toEqual({
+      ok: true,
+      state: {
+        schemaVersion: 1,
+        customFoods: [nettle],
+        entries: [nettleEntry],
+        settings: { theme: "dark", language: "en" },
+      },
+    });
+    expect(migrate({ schemaVersion: 1, settings: { theme: "dark" } })).toEqual({
+      ok: true,
+      state: {
+        ...emptyState(),
+        settings: { theme: "dark", language: "en" },
+      },
+    });
+  });
+
+  it("keeps language nb and replaces fr or a non-string with en", () => {
+    expect(
+      migrate({
+        schemaVersion: 1,
+        customFoods: [nettle],
+        entries: [nettleEntry],
+        settings: { theme: "dark", language: "nb", contrast: "high" },
+      }),
+    ).toEqual({
+      ok: true,
+      state: {
+        schemaVersion: 1,
+        customFoods: [nettle],
+        entries: [nettleEntry],
+        settings: { theme: "dark", language: "nb" },
+      },
+    });
+    expect(migrate({ schemaVersion: 1, settings: { theme: "light", language: "fr" } })).toEqual({
+      ok: true,
+      state: {
+        ...emptyState(),
+        settings: { theme: "light", language: "en" },
+      },
+    });
+    expect(migrate({ schemaVersion: 1, settings: { theme: "system", language: 3 } })).toEqual({
       ok: true,
       state: emptyState(),
     });
