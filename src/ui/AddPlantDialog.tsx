@@ -12,6 +12,7 @@ import { cleanName } from "../domain/log";
 import { findFoodByExactName, matchFoods, normalizeQuery } from "../domain/search";
 import type { Food, LanguageSetting } from "../domain/types";
 import type { Copy } from "./copy";
+import { CategoryIcon } from "./icons";
 import { actionMessage, type LogStatus } from "./useTracker";
 
 const PLANT_CATEGORIES = [
@@ -265,7 +266,10 @@ function AddPlantForm({
                     onClick={() => finish(onPick(match.food))}
                   >
                     <span className="result-copy">
-                      <span className="result-name">{shown}</span>
+                      <span className="result-name-row">
+                        <CategoryIcon category={match.food.category} />
+                        <span className="result-name">{shown}</span>
+                      </span>
                       {showAlias ? (
                         <span className="result-alias">{match.matchedLabel}</span>
                       ) : null}
@@ -359,11 +363,12 @@ function ChipGroup({
             <button
               key={category}
               type="button"
-              className="chip"
+              className="chip chip-with-icon"
               aria-label={`${copy.category[category]}, ${points} ${unit}`}
               aria-pressed={pressed === undefined ? undefined : pressed === category}
               onClick={() => onChoose(category)}
             >
+              <CategoryIcon category={category} />
               {copy.category[category]}
             </button>
           );
