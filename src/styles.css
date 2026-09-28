@@ -349,6 +349,44 @@ button:disabled {
   letter-spacing: 0.04em;
 }
 
+.section-title {
+  align-items: center;
+}
+
+.section-title-start {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.result-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.result-name-row .result-name {
+  min-width: 0;
+}
+
+.entry-meta-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip-with-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .ledger-list,
 .results {
   margin: 0;

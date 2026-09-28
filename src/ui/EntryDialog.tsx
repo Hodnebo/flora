@@ -5,6 +5,7 @@ import { cleanName } from "../domain/log";
 import type { Entry, Food, LanguageSetting } from "../domain/types";
 import { CategoryChips } from "./AddPlantDialog";
 import type { Copy } from "./copy";
+import { CategoryIcon } from "./icons";
 import { actionMessage, type LogStatus } from "./useTracker";
 
 type EntryDialogProps = {
@@ -111,8 +112,11 @@ function CatalogDetails({ food, copy }: { food: Food; copy: Copy }) {
   const unit = points === "1" ? copy.point : copy.points;
   return (
     <div className="entry-details">
-      <p className="entry-meta">
-        {copy.category[food.category]} · {points} {unit}
+      <p className="entry-meta entry-meta-with-icon">
+        <CategoryIcon category={food.category} />
+        <span>
+          {copy.category[food.category]} · {points} {unit}
+        </span>
       </p>
       <p className="note">{copy.catalogNote}</p>
     </div>

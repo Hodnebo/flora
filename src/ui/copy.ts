@@ -18,8 +18,6 @@ export type Copy = {
   editingEarlierWeek: string;
   weekNumber: (year: number, week: number) => string;
   saveError: string;
-  plantsHeading: string;
-  quarterHeading: string;
   logPlant: string;
   undo: string;
   emptyCurrentTitle: string;
@@ -97,8 +95,6 @@ const dictionary: Record<Language, Copy> = {
     editingEarlierWeek: "Editing an earlier week",
     weekNumber: (year, week) => `${year} · Week ${week}`,
     saveError: "Couldn't save on this device.",
-    plantsHeading: "Plants",
-    quarterHeading: "Nuts, seeds, herbs and spices",
     logPlant: "Log a plant",
     undo: "Undo",
     emptyCurrentTitle: "Nothing logged yet.",
@@ -175,8 +171,6 @@ const dictionary: Record<Language, Copy> = {
     editingEarlierWeek: "Redigerer en tidligere uke",
     weekNumber: (year, week) => `${year} · Uke ${week}`,
     saveError: "Kunne ikke lagre på denne enheten.",
-    plantsHeading: "Planter",
-    quarterHeading: "Nøtter, frø, urter og krydder",
     logPlant: "Logg en plante",
     undo: "Angre",
     emptyCurrentTitle: "Ingenting er logget ennå.",

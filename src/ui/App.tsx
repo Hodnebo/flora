@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WEEKLY_GOAL, isQuarterPointCategory, pointsForCategory } from "../domain/category";
+import { WEEKLY_GOAL } from "../domain/category";
 import { formatPoints } from "../domain/format";
 import { parseWeekKey, weekRange } from "../domain/isoWeek";
 import { AddPlantDialog } from "./AddPlantDialog";
 import { EntryDialog } from "./EntryDialog";
-import { ChevronLeft, ChevronRight } from "./icons";
+import { groupLedgerByCategory, type LedgerSection } from "./groupLedger";
+import { CategoryIcon, ChevronLeft, ChevronRight } from "./icons";
 import { useTracker, type Tracker } from "./useTracker";
 
 export function App() {
@@ -131,8 +132,14 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
   const activeFood = activeEntry ? (tracker.foods.get(activeEntry.foodId) ?? null) : null;
   const loggedFoodIds = new Set(tracker.entries.map((entry) => entry.foodId));
   const foodList = [...tracker.foods.values()];
-  const plants = ledgerRows(tracker, false);
-  const quarters = ledgerRows(tracker, true);
+  const ledgerSections = groupLedgerByCategory({
+    entries: tracker.entries,
+    foods: tracker.foods,
+    dateLocale: tracker.copy.dateLocale,
+    categoryLabels: tracker.copy.category,
+    unknownPlantLabel: tracker.copy.unknownPlant,
+    nameOf: tracker.nameOf,
+  });
 
   function closeAdd() {
     setAddOpen(false);
@@ -181,18 +188,13 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
           <EmptyLedger current={tracker.isCurrentWeek} copy={tracker.copy} />
         ) : (
           <div className="ledger">
-            <LedgerGroup
-              id="plants-heading"
-              label={tracker.copy.plantsHeading}
-              rows={plants}
-              onOpen={openEntry}
-            />
-            <LedgerGroup
-              id="quarter-heading"
-              label={tracker.copy.quarterHeading}
-              rows={quarters}
-              onOpen={openEntry}
-            />
+            {ledgerSections.map((section) => (
+              <LedgerGroup
+                key={section.kind === "category" ? section.category : "unknown"}
+                section={section}
+                onOpen={openEntry}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -320,21 +322,25 @@ function EmptyLedger({ current, copy }: { current: boolean; copy: Tracker["copy"
 }
 
 function LedgerGroup({
-  id,
-  label,
-  rows,
+  section,
   onOpen,
 }: {
-  id: string;
-  label: string;
-  rows: LedgerRow[];
+  section: LedgerSection;
   onOpen: (entryId: string) => void;
 }) {
-  if (rows.length === 0) return null;
+  const { rows, label } = section;
+  const id = section.kind === "category" ? `ledger-${section.category}` : "ledger-unknown";
   return (
     <section className="ledger-section" aria-labelledby={id}>
-      <h2 id={id} className="section-label">
-        <span>{label}</span>
+      <h2 id={id} className="section-label section-title">
+        {section.kind === "category" ? (
+          <span className="section-title-start">
+            <CategoryIcon category={section.category} />
+            <span>{label}</span>
+          </span>
+        ) : (
+          <span>{label}</span>
+        )}
         <span className="section-count">{rows.length}</span>
       </h2>
       <ul className="ledger-list">
@@ -343,9 +349,6 @@ function LedgerGroup({
             <button type="button" className="ledger-row" onClick={() => onOpen(row.id)}>
               <span className="ledger-copy">
                 <span className="ledger-name">{row.name}</span>
-                {row.categoryLabel ? (
-                  <span className="ledger-category">{row.categoryLabel}</span>
-                ) : null}
               </span>
               {row.pointsLabel ? <span className="ledger-points">{row.pointsLabel}</span> : null}
             </button>
@@ -354,41 +357,6 @@ function LedgerGroup({
       </ul>
     </section>
   );
-}
-
-type LedgerRow = {
-  id: string;
-  name: string;
-  categoryLabel: string | null;
-  pointsLabel: string | null;
-};
-
-function ledgerRows(tracker: Tracker, quarter: boolean): LedgerRow[] {
-  const rows: LedgerRow[] = [];
-  for (const entry of tracker.entries) {
-    const food = tracker.foods.get(entry.foodId);
-    if (!food) {
-      if (!quarter) {
-        rows.push({
-          id: entry.id,
-          name: tracker.copy.unknownPlant,
-          categoryLabel: null,
-          pointsLabel: null,
-        });
-      }
-      continue;
-    }
-    if (isQuarterPointCategory(food.category) !== quarter) continue;
-    rows.push({
-      id: entry.id,
-      name: tracker.nameOf(food),
-      categoryLabel: tracker.copy.category[food.category],
-      pointsLabel: formatPoints(pointsForCategory(food.category)),
-    });
-  }
-  const locale = tracker.copy.dateLocale;
-  rows.sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: "base" }));
-  return rows;
 }
 
 function scoreCaption(score: number, copy: Tracker["copy"]): string {
