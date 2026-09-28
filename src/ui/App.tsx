@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  CATEGORY_LABEL,
-  WEEKLY_GOAL,
-  isQuarterPointCategory,
-  pointsForCategory,
-} from "../domain/category";
+import { WEEKLY_GOAL, isQuarterPointCategory, pointsForCategory } from "../domain/category";
 import { formatPoints } from "../domain/format";
 import { parseWeekKey, weekRange } from "../domain/isoWeek";
-import type { Entry, Food } from "../domain/types";
 import { AddPlantDialog } from "./AddPlantDialog";
 import { EntryDialog } from "./EntryDialog";
 import { ChevronLeft, ChevronRight } from "./icons";
@@ -18,12 +12,12 @@ export function App() {
   if (tracker.loadError) {
     return (
       <div className="shell">
-        <LoadError reason={tracker.loadError} />
+        <LoadError reason={tracker.loadError} copy={tracker.copy} />
       </div>
     );
   }
   const today = new Date();
-  const weekLabel = formatWeekRange(tracker.weekKey, today);
+  const weekLabel = formatWeekRange(tracker.weekKey, today, tracker.copy.dateLocale);
   return (
     <div className="shell">
       <Header tracker={tracker} weekLabel={weekLabel} />
@@ -32,56 +26,70 @@ export function App() {
   );
 }
 
-function LoadError({ reason }: { reason: "corrupt" | "unsupported-version" }) {
-  const heading =
-    reason === "unsupported-version" ? "This save needs a newer Flora" : "Couldn't read the save";
+function LoadError({
+  reason,
+  copy,
+}: {
+  reason: "corrupt" | "unsupported-version";
+  copy: Tracker["copy"];
+}) {
+  const heading = reason === "unsupported-version" ? copy.loadNeedsNewer : copy.loadCorrupt;
   return (
     <main className="load-error">
       <p className="display wordmark">Flora</p>
       <h1 className="display error-title">{heading}</h1>
-      <p className="error-body">The original data was left untouched.</p>
+      <p className="error-body">{copy.loadUntouched}</p>
     </main>
   );
 }
 
 function Header({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string }) {
   const { year, week } = parseWeekKey(tracker.weekKey);
-  const themeAria = `Theme: ${tracker.themeLabel}. Activate to cycle Auto, Light, and Dark. Showing ${tracker.resolvedThemeLabel}.`;
+  const { copy } = tracker;
+  const themeAria = copy.themeAria(tracker.themeLabel, tracker.resolvedThemeLabel);
   return (
     <header className="header">
       <div className="header-top">
         <h1 className="display wordmark">Flora</h1>
-        <button
-          type="button"
-          className="text-btn"
-          onClick={tracker.cycleTheme}
-          aria-label={themeAria}
-        >
-          {tracker.themeLabel}
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="text-btn"
+            onClick={tracker.cycleLanguage}
+            aria-label={copy.languageAria}
+          >
+            {copy.languageLabel}
+          </button>
+          <button
+            type="button"
+            className="text-btn"
+            onClick={tracker.cycleTheme}
+            aria-label={themeAria}
+          >
+            {tracker.themeLabel}
+          </button>
+        </div>
       </div>
-      <div className="stepper" role="group" aria-label="Week">
+      <div className="stepper" role="group" aria-label={copy.weekGroup}>
         <button
           type="button"
           className="icon-btn"
           onClick={tracker.goPrev}
-          aria-label="Previous week"
+          aria-label={copy.previousWeek}
         >
           <ChevronLeft />
         </button>
         <div className="stepper-text">
           <p className="week-range">{weekLabel}</p>
-          {tracker.isCurrentWeek ? null : <p className="hint">Editing an earlier week</p>}
+          {tracker.isCurrentWeek ? null : <p className="hint">{copy.editingEarlierWeek}</p>}
           <p className="week-sub">
             {tracker.isCurrentWeek ? (
-              "This week"
+              copy.thisWeek
             ) : (
               <>
-                <span>
-                  {year} · Week {week}
-                </span>
+                <span>{copy.weekNumber(year, week)}</span>
                 <button type="button" className="link-btn" onClick={tracker.goToCurrent}>
-                  This week
+                  {copy.thisWeek}
                 </button>
               </>
             )}
@@ -93,7 +101,7 @@ function Header({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string })
           onClick={tracker.goNext}
           disabled={tracker.isCurrentWeek}
           aria-disabled={tracker.isCurrentWeek}
-          aria-label="Next week"
+          aria-label={copy.nextWeek}
         >
           <ChevronRight />
         </button>
@@ -123,8 +131,8 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
   const activeFood = activeEntry ? (tracker.foods.get(activeEntry.foodId) ?? null) : null;
   const loggedFoodIds = new Set(tracker.entries.map((entry) => entry.foodId));
   const foodList = [...tracker.foods.values()];
-  const plants = ledgerRows(tracker.entries, tracker.foods, false);
-  const quarters = ledgerRows(tracker.entries, tracker.foods, true);
+  const plants = ledgerRows(tracker, false);
+  const quarters = ledgerRows(tracker, true);
 
   function closeAdd() {
     setAddOpen(false);
@@ -143,7 +151,7 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
 
   function removeActive() {
     if (!activeEntry) return;
-    const name = activeFood?.canonicalName ?? "Unknown plant";
+    const name = activeFood ? tracker.nameOf(activeFood) : tracker.copy.unknownPlant;
     const entryId = activeEntry.id;
     setActiveEntryId(null);
     tracker.remove(entryId, name);
@@ -168,15 +176,20 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
             {tracker.saveError}
           </p>
         ) : null}
-        <Hero score={tracker.score} weekKey={tracker.weekKey} />
+        <Hero score={tracker.score} weekKey={tracker.weekKey} copy={tracker.copy} />
         {tracker.entries.length === 0 ? (
-          <EmptyLedger current={tracker.isCurrentWeek} />
+          <EmptyLedger current={tracker.isCurrentWeek} copy={tracker.copy} />
         ) : (
           <div className="ledger">
-            <LedgerGroup id="plants-heading" label="Plants" rows={plants} onOpen={openEntry} />
+            <LedgerGroup
+              id="plants-heading"
+              label={tracker.copy.plantsHeading}
+              rows={plants}
+              onOpen={openEntry}
+            />
             <LedgerGroup
               id="quarter-heading"
-              label="Nuts, seeds, herbs and spices"
+              label={tracker.copy.quarterHeading}
               rows={quarters}
               onOpen={openEntry}
             />
@@ -185,14 +198,14 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
       </main>
       <footer className="dock">
         <button type="button" className="primary-btn" onClick={openAdd}>
-          Log a plant
+          {tracker.copy.logPlant}
         </button>
       </footer>
       {tracker.undo && !addOpen ? (
         <div className="snackbar" role="status">
           <p>{tracker.undo.message}</p>
           <button type="button" onClick={tracker.performUndo}>
-            Undo
+            {tracker.copy.undo}
           </button>
         </div>
       ) : null}
@@ -211,6 +224,9 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
             ? tracker.replace(replaceEntryId, food)
             : tracker.addFood(food)
         }
+        copy={tracker.copy}
+        language={tracker.language}
+        nameOf={tracker.nameOf}
         onCreate={(name, category) =>
           tracker.createCustom(
             name,
@@ -227,6 +243,9 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
         onClose={closeEntry}
         onRemove={removeActive}
         onReplace={startReplace}
+        copy={tracker.copy}
+        language={tracker.language}
+        nameOf={tracker.nameOf}
         onSaveCustom={(patch) => {
           if (!activeFood) return { ok: false, error: "not-custom" };
           return tracker.updateCustom(activeFood.id, patch);
@@ -236,8 +255,8 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
   );
 }
 
-function Hero({ score, weekKey }: { score: number; weekKey: string }) {
-  const caption = scoreCaption(score);
+function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: Tracker["copy"] }) {
+  const caption = scoreCaption(score, copy);
   const valueNow = Math.min(Math.max(score, 0), WEEKLY_GOAL);
   const width = Math.min(100, Math.max(0, (score / WEEKLY_GOAL) * 100));
   const scoreRef = useRef<HTMLSpanElement>(null);
@@ -269,7 +288,7 @@ function Hero({ score, weekKey }: { score: number; weekKey: string }) {
       <div
         className="track"
         role="progressbar"
-        aria-label="Weekly score"
+        aria-label={copy.weeklyScore}
         aria-valuemin={0}
         aria-valuemax={WEEKLY_GOAL}
         aria-valuenow={valueNow}
@@ -284,18 +303,18 @@ function Hero({ score, weekKey }: { score: number; weekKey: string }) {
   );
 }
 
-function EmptyLedger({ current }: { current: boolean }) {
+function EmptyLedger({ current, copy }: { current: boolean; copy: Tracker["copy"] }) {
   if (!current) {
     return (
       <div className="empty">
-        <h2 className="display">Nothing logged this week.</h2>
+        <h2 className="display">{copy.emptyPastTitle}</h2>
       </div>
     );
   }
   return (
     <div className="empty">
-      <h2 className="display">Nothing logged yet.</h2>
-      <p>Fruit, grains, nuts, herbs, and spices all count. Each plant counts once.</p>
+      <h2 className="display">{copy.emptyCurrentTitle}</h2>
+      <p>{copy.emptyCurrentBody}</p>
     </div>
   );
 }
@@ -344,45 +363,47 @@ type LedgerRow = {
   pointsLabel: string | null;
 };
 
-function ledgerRows(
-  entries: readonly Entry[],
-  foods: ReadonlyMap<string, Food>,
-  quarter: boolean,
-): LedgerRow[] {
+function ledgerRows(tracker: Tracker, quarter: boolean): LedgerRow[] {
   const rows: LedgerRow[] = [];
-  for (const entry of entries) {
-    const food = foods.get(entry.foodId);
+  for (const entry of tracker.entries) {
+    const food = tracker.foods.get(entry.foodId);
     if (!food) {
       if (!quarter) {
-        rows.push({ id: entry.id, name: "Unknown plant", categoryLabel: null, pointsLabel: null });
+        rows.push({
+          id: entry.id,
+          name: tracker.copy.unknownPlant,
+          categoryLabel: null,
+          pointsLabel: null,
+        });
       }
       continue;
     }
     if (isQuarterPointCategory(food.category) !== quarter) continue;
     rows.push({
       id: entry.id,
-      name: food.canonicalName,
-      categoryLabel: CATEGORY_LABEL[food.category],
+      name: tracker.nameOf(food),
+      categoryLabel: tracker.copy.category[food.category],
       pointsLabel: formatPoints(pointsForCategory(food.category)),
     });
   }
-  rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  const locale = tracker.copy.dateLocale;
+  rows.sort((a, b) => a.name.localeCompare(b.name, locale, { sensitivity: "base" }));
   return rows;
 }
 
-function scoreCaption(score: number): string {
-  if (score <= 0) return "A fresh week.";
-  if (score < WEEKLY_GOAL) return `${formatPoints(WEEKLY_GOAL - score)} to thirty`;
-  if (score === WEEKLY_GOAL) return "Thirty distinct plants this week.";
-  return `${formatPoints(score - WEEKLY_GOAL)} past thirty`;
+function scoreCaption(score: number, copy: Tracker["copy"]): string {
+  if (score <= 0) return copy.freshWeek;
+  if (score < WEEKLY_GOAL) return copy.toThirty(formatPoints(WEEKLY_GOAL - score));
+  if (score === WEEKLY_GOAL) return copy.thirtyExact;
+  return copy.pastThirty(formatPoints(score - WEEKLY_GOAL));
 }
 
-function formatWeekRange(weekKey: string, today: Date): string {
+function formatWeekRange(weekKey: string, today: Date, locale: string): string {
   const { start, end } = weekRange(weekKey);
   const crossesYear = start.getFullYear() !== end.getFullYear();
   const todayYear = today.getFullYear();
   const format = (date: Date) =>
-    new Intl.DateTimeFormat(undefined, {
+    new Intl.DateTimeFormat(locale, {
       day: "numeric",
       month: "short",
       ...(crossesYear || date.getFullYear() !== todayYear ? { year: "numeric" } : {}),

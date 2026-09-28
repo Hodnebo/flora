@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { Category } from "../domain/category";
-import { foodMap } from "../domain/foods";
+import { displayName, foodMap } from "../domain/foods";
 import { compareWeekKeys, isoWeekKey, isWeekKey, shiftWeek } from "../domain/isoWeek";
 import {
   cleanName,
@@ -16,6 +16,7 @@ import {
   removeEntry,
   replaceEntryFood,
   replaceEntryWithCustomFood,
+  setLanguage,
   setTheme,
   updateCustomFood,
 } from "../domain/log";
@@ -29,6 +30,7 @@ import {
   type ThemeSetting,
 } from "../domain/types";
 import { browserStore } from "../persistence/browserStore";
+import { copyFor, type Copy } from "./copy";
 
 export type LogStatus = { ok: true } | { ok: false; error: DomainError | "save-failed" };
 
@@ -38,14 +40,7 @@ type UndoState = {
 };
 
 const THEME_ORDER: readonly ThemeSetting[] = ["system", "light", "dark"];
-
-const THEME_LABEL: Record<ThemeSetting, string> = {
-  system: "Auto",
-  light: "Light",
-  dark: "Dark",
-};
-
-const SAVE_ERROR = "Couldn't save on this device.";
+const LANGUAGE_ORDER = ["en", "nb"] as const;
 
 let didBackup = false;
 
@@ -90,6 +85,10 @@ function canonicalWeekHref(): string | null {
   return hrefForWeek(current, current);
 }
 
+function applyLanguage(language: Copy["dateLocale"]) {
+  document.documentElement.lang = language;
+}
+
 function applyTheme(resolved: "light" | "dark") {
   const root = document.documentElement;
   root.dataset.theme = resolved;
@@ -119,11 +118,14 @@ export function useTracker() {
   const systemDark = useSyncExternalStore(subscribeDark, systemIsDark, () => false);
 
   const theme = state.settings.theme;
+  const language = state.settings.language;
+  const copy = copyFor(language);
   const resolvedTheme = theme === "system" ? (systemDark ? "dark" : "light") : theme;
 
   useLayoutEffect(() => {
+    applyLanguage(language);
     applyTheme(resolvedTheme);
-  }, [resolvedTheme]);
+  }, [language, resolvedTheme]);
 
   useEffect(() => {
     if (didBackup || initialLoad.ok) return;
@@ -187,7 +189,7 @@ export function useTracker() {
   function commit(next: PersistedState, undoMessage?: string): boolean {
     const saved = browserStore.save(next);
     if (!saved.ok) {
-      setSaveError(SAVE_ERROR);
+      setSaveError(copyFor(stateRef.current.settings.language).saveError);
       return false;
     }
     setSaveError(null);
@@ -209,7 +211,7 @@ export function useTracker() {
     if (!undo) return;
     const saved = browserStore.save(undo.snapshot);
     if (!saved.ok) {
-      setSaveError(SAVE_ERROR);
+      setSaveError(copyFor(stateRef.current.settings.language).saveError);
       return;
     }
     setSaveError(null);
@@ -249,10 +251,25 @@ export function useTracker() {
     commit(setTheme(stateRef.current, next));
   }
 
+  function cycleLanguage() {
+    const current = stateRef.current.settings.language;
+    const index = LANGUAGE_ORDER.indexOf(current);
+    const next = LANGUAGE_ORDER[(index + 1) % LANGUAGE_ORDER.length] ?? "en";
+    commit(setLanguage(stateRef.current, next));
+  }
+
+  function messages(): Copy {
+    return copyFor(stateRef.current.settings.language);
+  }
+
+  function nameOf(food: Food): string {
+    return displayName(food, stateRef.current.settings.language);
+  }
+
   function addFood(food: Food): LogStatus {
     const result = logFood(stateRef.current, food.id, weekKeyRef.current);
     if (!result.ok) return result;
-    if (!commit(result.value, `Added ${food.canonicalName}`))
+    if (!commit(result.value, messages().added(nameOf(food))))
       return { ok: false, error: "save-failed" };
     return { ok: true };
   }
@@ -260,7 +277,7 @@ export function useTracker() {
   function remove(entryId: string, name: string) {
     const result = removeEntry(stateRef.current, entryId);
     if (!result.ok) return;
-    commit(result.value, `Removed ${name}`);
+    commit(result.value, messages().removed(name));
   }
 
   function replace(entryId: string, food: Food): LogStatus {
@@ -268,7 +285,7 @@ export function useTracker() {
     const result = replaceEntryFood(current, entryId, food.id);
     if (!result.ok) return result;
     if (result.value === current) return { ok: true };
-    if (!commit(result.value, `Replaced with ${food.canonicalName}`)) {
+    if (!commit(result.value, messages().replacedWith(nameOf(food)))) {
       return { ok: false, error: "save-failed" };
     }
     return { ok: true };
@@ -277,7 +294,8 @@ export function useTracker() {
   function createCustom(name: string, category: Category, replaceEntryId?: string): LogStatus {
     const current = stateRef.current;
     const known = [...foodMap(current.customFoods).values()];
-    const existing = findFoodByExactName(known, name);
+    const languageNow = current.settings.language;
+    const existing = findFoodByExactName(known, name, languageNow);
     if (existing) {
       if (replaceEntryId) return replace(replaceEntryId, existing);
       return addFood(existing);
@@ -287,7 +305,7 @@ export function useTracker() {
     if (replaceEntryId) {
       const replaced = replaceEntryWithCustomFood(current, replaceEntryId, name, category);
       if (!replaced.ok) return replaced;
-      if (!commit(replaced.value, `Replaced with ${label}`)) {
+      if (!commit(replaced.value, messages().replacedWith(label))) {
         return { ok: false, error: "save-failed" };
       }
       return { ok: true };
@@ -295,7 +313,7 @@ export function useTracker() {
 
     const created = logCustomFood(current, name, category, weekKeyRef.current);
     if (!created.ok) return created;
-    if (!commit(created.value, `Added ${label}`)) return { ok: false, error: "save-failed" };
+    if (!commit(created.value, messages().added(label))) return { ok: false, error: "save-failed" };
     return { ok: true };
   }
 
@@ -303,8 +321,8 @@ export function useTracker() {
     const result = updateCustomFood(stateRef.current, foodId, patch);
     if (!result.ok) return result;
     const updated = result.value.customFoods.find((food) => food.id === foodId);
-    const name = updated?.canonicalName ?? patch.name ?? "plant";
-    if (!commit(result.value, `Updated ${name}`)) return { ok: false, error: "save-failed" };
+    const name = updated ? nameOf(updated) : (patch.name ?? messages().unknownPlant);
+    if (!commit(result.value, messages().updated(name))) return { ok: false, error: "save-failed" };
     return { ok: true };
   }
 
@@ -326,10 +344,15 @@ export function useTracker() {
     undo: undo ? { message: undo.message } : null,
     performUndo,
     cycleTheme,
+    cycleLanguage,
     theme,
-    themeLabel: THEME_LABEL[theme],
+    language,
+    copy,
+    themeLabel:
+      theme === "light" ? copy.themeLight : theme === "dark" ? copy.themeDark : copy.themeAuto,
     resolvedTheme,
-    resolvedThemeLabel: resolvedTheme === "dark" ? "Dark" : "Light",
+    resolvedThemeLabel: resolvedTheme === "dark" ? copy.resolvedDark : copy.resolvedLight,
+    nameOf: (food: Food) => displayName(food, language),
     addFood,
     remove,
     replace,
@@ -341,9 +364,9 @@ export function useTracker() {
 
 export type Tracker = ReturnType<typeof useTracker>;
 
-export function actionMessage(error: string): string {
-  if (error === "duplicate-food") return "Already counted this week.";
-  if (error === "empty-name") return "Enter a name.";
-  if (error === "food-exists") return "That plant is already in your list.";
-  return SAVE_ERROR;
+export function actionMessage(error: string, copy: Copy): string {
+  if (error === "duplicate-food") return copy.duplicateFood;
+  if (error === "empty-name") return copy.emptyName;
+  if (error === "food-exists") return copy.foodExists;
+  return copy.couldntSave;
 }

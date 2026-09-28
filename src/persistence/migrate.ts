@@ -5,6 +5,7 @@ import {
   SCHEMA_VERSION,
   type Entry,
   type Food,
+  type LanguageSetting,
   type PersistedState,
   type ThemeSetting,
 } from "../domain/types";
@@ -38,7 +39,10 @@ function repairV1(record: Record<string, unknown>): PersistedState {
     schemaVersion: SCHEMA_VERSION,
     customFoods,
     entries: readEntries(record.entries, customIds),
-    settings: { theme: readTheme(record.settings) },
+    settings: {
+      theme: readTheme(record.settings),
+      language: readLanguage(record.settings),
+    },
   };
 }
 
@@ -152,6 +156,13 @@ function readTheme(settings: unknown): ThemeSetting {
   const theme = settings.theme;
   if (theme === "system" || theme === "light" || theme === "dark") return theme;
   return "system";
+}
+
+function readLanguage(settings: unknown): LanguageSetting {
+  if (!isRecord(settings)) return "en";
+  const language = settings.language;
+  if (language === "en" || language === "nb") return language;
+  return "en";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

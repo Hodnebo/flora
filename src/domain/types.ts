@@ -19,8 +19,11 @@ export interface Entry {
 
 export type ThemeSetting = "system" | "light" | "dark";
 
+export type LanguageSetting = "en" | "nb";
+
 export interface Settings {
   theme: ThemeSetting;
+  language: LanguageSetting;
 }
 
 export interface PersistedState {
@@ -56,6 +59,6 @@ export function emptyState(): PersistedState {
     schemaVersion: SCHEMA_VERSION,
     customFoods: [],
     entries: [],
-    settings: { theme: "system" },
+    settings: { theme: "system", language: "en" },
   };
 }
