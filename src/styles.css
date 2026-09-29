@@ -13,6 +13,11 @@
   --accent-soft: #e4ede7;
   --danger: #8d3b2f;
   --track: #dfd7c8;
+  --bar-early: #7d9a55;
+  --bar-ten: #2f9d5c;
+  --bar-twenty: #0e8f6a;
+  --bar-goal: #e09a2b;
+  --bar-goal-ink: #8a5a12;
 }
 
 :root[data-theme="dark"] {
@@ -30,6 +35,11 @@
   --accent-soft: #1c2e23;
   --danger: #f0a598;
   --track: #2c3227;
+  --bar-early: #8aab62;
+  --bar-ten: #6dce90;
+  --bar-twenty: #5dceb8;
+  --bar-goal: #f0c56a;
+  --bar-goal-ink: #f0c56a;
 }
 
 *,
@@ -231,7 +241,24 @@ button:disabled {
 }
 
 .hero {
+  --bar-color: var(--bar-early);
+  --bar-glow: transparent;
   padding: 18px 0 8px;
+}
+
+.hero[data-stage="ten"] {
+  --bar-color: var(--bar-ten);
+  --bar-glow: color-mix(in srgb, var(--bar-ten) 28%, transparent);
+}
+
+.hero[data-stage="twenty"] {
+  --bar-color: var(--bar-twenty);
+  --bar-glow: color-mix(in srgb, var(--bar-twenty) 40%, transparent);
+}
+
+.hero[data-stage="goal"] {
+  --bar-color: var(--bar-goal);
+  --bar-glow: color-mix(in srgb, var(--bar-goal) 55%, transparent);
 }
 
 .score-line {
@@ -246,6 +273,11 @@ button:disabled {
   line-height: 0.9;
   letter-spacing: -0.045em;
   font-variant-numeric: tabular-nums;
+  transition: color 400ms ease-out;
+}
+
+.hero[data-stage="goal"] .score-num {
+  color: var(--bar-goal-ink);
 }
 
 .score-arrive {
@@ -276,7 +308,6 @@ button:disabled {
   position: relative;
   height: 12px;
   margin-top: 16px;
-  overflow: hidden;
   border-radius: 999px;
   background: var(--track);
 }
@@ -285,8 +316,28 @@ button:disabled {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
-  transition: width 400ms ease-out;
+  background: var(--bar-color);
+  box-shadow: 0 0 10px var(--bar-glow);
+  transition:
+    width 400ms ease-out,
+    background-color 400ms ease-out,
+    box-shadow 400ms ease-out;
+}
+
+.bar-cheer {
+  animation: bar-cheer 640ms ease-out;
+}
+
+@keyframes bar-cheer {
+  0% {
+    filter: brightness(1);
+  }
+  38% {
+    filter: brightness(1.45);
+  }
+  100% {
+    filter: brightness(1);
+  }
 }
 
 .tick {
@@ -796,6 +847,12 @@ button:disabled {
   }
 
   .bar-fill {
+    transition: none;
+  }
+
+  .bar-cheer,
+  .score-num {
+    animation: none;
     transition: none;
   }
 }
