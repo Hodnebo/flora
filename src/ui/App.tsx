@@ -259,28 +259,24 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
 
 function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: Tracker["copy"] }) {
   const caption = scoreCaption(score, copy);
+  const stage = barStage(score);
   const valueNow = Math.min(Math.max(score, 0), WEEKLY_GOAL);
   const width = Math.min(100, Math.max(0, (score / WEEKLY_GOAL) * 100));
   const scoreRef = useRef<HTMLSpanElement>(null);
-  const previous = useRef({ score, weekKey });
+  const barRef = useRef<HTMLSpanElement>(null);
+  const previous = useRef({ score, weekKey, stage });
 
   useEffect(() => {
     const before = previous.current;
-    previous.current = { score, weekKey };
+    previous.current = { score, weekKey, stage };
     if (before.weekKey !== weekKey) return;
-    if (before.score >= WEEKLY_GOAL || score < WEEKLY_GOAL) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const element = scoreRef.current;
-    if (!element) return;
-    element.classList.remove("score-arrive");
-    void element.offsetWidth;
-    element.classList.add("score-arrive");
-    const onEnd = () => element.classList.remove("score-arrive");
-    element.addEventListener("animationend", onEnd, { once: true });
-  }, [score, weekKey]);
+    if (before.score < WEEKLY_GOAL && score >= WEEKLY_GOAL) cheer(scoreRef.current, "score-arrive");
+    if (BAR_STAGE_RANK[stage] > BAR_STAGE_RANK[before.stage]) cheer(barRef.current, "bar-cheer");
+  }, [score, weekKey, stage]);
 
   return (
-    <section className="hero" aria-live="polite" aria-atomic="true">
+    <section className="hero" data-stage={stage} aria-live="polite" aria-atomic="true">
       <p className="score-line">
         <span ref={scoreRef} className="display score-num">
           {formatPoints(score)}
@@ -296,7 +292,7 @@ function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: 
         aria-valuenow={valueNow}
         aria-valuetext={caption}
       >
-        <span className="bar-fill" style={{ width: `${width}%` }} />
+        <span ref={barRef} className="bar-fill" style={{ width: `${width}%` }} />
         <span className="tick" style={{ left: "33.333%" }} aria-hidden="true" />
         <span className="tick" style={{ left: "66.666%" }} aria-hidden="true" />
       </div>
@@ -357,6 +353,31 @@ function LedgerGroup({
       </ul>
     </section>
   );
+}
+
+type BarStage = "early" | "ten" | "twenty" | "goal";
+
+const BAR_STAGE_RANK: Record<BarStage, number> = {
+  early: 0,
+  ten: 1,
+  twenty: 2,
+  goal: 3,
+};
+
+function barStage(score: number): BarStage {
+  if (score >= WEEKLY_GOAL) return "goal";
+  if (score >= 20) return "twenty";
+  if (score >= 10) return "ten";
+  return "early";
+}
+
+function cheer(element: HTMLElement | null, className: string) {
+  if (!element) return;
+  element.classList.remove(className);
+  void element.offsetWidth;
+  element.classList.add(className);
+  const onEnd = () => element.classList.remove(className);
+  element.addEventListener("animationend", onEnd, { once: true });
 }
 
 function scoreCaption(score: number, copy: Tracker["copy"]): string {
