@@ -26,8 +26,7 @@ export type Copy = {
   weeklyScore: string;
   freshWeek: string;
   toThirty: (remaining: string) => string;
-  thirtyExact: string;
-  pastThirty: (extra: string) => string;
+  toNext: (remaining: string, goal: number) => string;
   unknownPlant: string;
   loadNeedsNewer: string;
   loadCorrupt: string;
@@ -103,8 +102,7 @@ const dictionary: Record<Language, Copy> = {
     weeklyScore: "Weekly score",
     freshWeek: "A fresh week.",
     toThirty: (remaining) => `${remaining} to thirty`,
-    thirtyExact: "Thirty distinct plants this week.",
-    pastThirty: (extra) => `${extra} past thirty`,
+    toNext: (remaining, goal) => `${remaining} to ${goal}`,
     unknownPlant: "Unknown plant",
     loadNeedsNewer: "This save needs a newer Flora",
     loadCorrupt: "Couldn't read the save",
@@ -180,8 +178,7 @@ const dictionary: Record<Language, Copy> = {
     weeklyScore: "Ukespoeng",
     freshWeek: "En ny uke.",
     toThirty: (remaining) => `${remaining} til tretti`,
-    thirtyExact: "Tretti forskjellige planter denne uken.",
-    pastThirty: (extra) => `${extra} over tretti`,
+    toNext: (remaining, goal) => `${remaining} til ${goal}`,
     unknownPlant: "Ukjent plante",
     loadNeedsNewer: "Denne lagringen trenger en nyere Flora",
     loadCorrupt: "Kunne ikke lese lagringen",
