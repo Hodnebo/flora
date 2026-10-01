@@ -38,7 +38,7 @@ describe("migrate", () => {
       schemaVersion: 1,
       customFoods: [nettle],
       entries: [nettleEntry],
-      settings: { theme: "dark", language: "en" },
+      settings: { theme: "dark", language: "en", grouping: "day" },
     };
     expect(migrate(state)).toEqual({ ok: true, state });
   });
@@ -57,7 +57,7 @@ describe("migrate", () => {
         schemaVersion: 1,
         customFoods: [],
         entries: [],
-        settings: { theme: "light", language: "en" },
+        settings: { theme: "light", language: "en", grouping: "day" },
       },
     });
   });
@@ -276,14 +276,14 @@ describe("migrate", () => {
         schemaVersion: 1,
         customFoods: [nettle],
         entries: [nettleEntry],
-        settings: { theme: "dark", language: "en" },
+        settings: { theme: "dark", language: "en", grouping: "day" },
       },
     });
     expect(migrate({ schemaVersion: 1, settings: { theme: "dark" } })).toEqual({
       ok: true,
       state: {
         ...emptyState(),
-        settings: { theme: "dark", language: "en" },
+        settings: { theme: "dark", language: "en", grouping: "day" },
       },
     });
   });
@@ -302,17 +302,33 @@ describe("migrate", () => {
         schemaVersion: 1,
         customFoods: [nettle],
         entries: [nettleEntry],
-        settings: { theme: "dark", language: "nb" },
+        settings: { theme: "dark", language: "nb", grouping: "day" },
       },
     });
     expect(migrate({ schemaVersion: 1, settings: { theme: "light", language: "fr" } })).toEqual({
       ok: true,
       state: {
         ...emptyState(),
-        settings: { theme: "light", language: "en" },
+        settings: { theme: "light", language: "en", grouping: "day" },
       },
     });
     expect(migrate({ schemaVersion: 1, settings: { theme: "system", language: 3 } })).toEqual({
+      ok: true,
+      state: emptyState(),
+    });
+  });
+
+  it("keeps a category grouping and replaces anything else with day", () => {
+    expect(
+      migrate({ schemaVersion: 1, settings: { theme: "dark", grouping: "category" } }),
+    ).toEqual({
+      ok: true,
+      state: {
+        ...emptyState(),
+        settings: { theme: "dark", language: "en", grouping: "category" },
+      },
+    });
+    expect(migrate({ schemaVersion: 1, settings: { grouping: "week" } })).toEqual({
       ok: true,
       state: emptyState(),
     });

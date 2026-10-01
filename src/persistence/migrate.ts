@@ -6,6 +6,7 @@ import {
   type Entry,
   type Food,
   type LanguageSetting,
+  type LedgerGrouping,
   type PersistedState,
   type ThemeSetting,
 } from "../domain/types";
@@ -42,6 +43,7 @@ function repairV1(record: Record<string, unknown>): PersistedState {
     settings: {
       theme: readTheme(record.settings),
       language: readLanguage(record.settings),
+      grouping: readGrouping(record.settings),
     },
   };
 }
@@ -163,6 +165,13 @@ function readLanguage(settings: unknown): LanguageSetting {
   const language = settings.language;
   if (language === "en" || language === "nb") return language;
   return "en";
+}
+
+function readGrouping(settings: unknown): LedgerGrouping {
+  if (!isRecord(settings)) return "day";
+  const grouping = settings.grouping;
+  if (grouping === "day" || grouping === "category") return grouping;
+  return "day";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

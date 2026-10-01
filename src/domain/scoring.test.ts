@@ -173,7 +173,7 @@ describe("scoreWeek", () => {
   it("does not store the weekly goal on the saved state", () => {
     const state = stateOf([broccoli], [entry("e1", broccoli.id, WEEK, NOW.toISOString())]);
     expect(state).not.toHaveProperty("goal");
-    expect(state.settings).toEqual({ theme: "system", language: "en" });
+    expect(state.settings).toEqual({ theme: "system", language: "en", grouping: "day" });
     expect(JSON.parse(JSON.stringify(state))).not.toHaveProperty("goal");
   });
 });

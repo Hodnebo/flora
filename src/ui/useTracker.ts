@@ -16,6 +16,7 @@ import {
   removeEntry,
   replaceEntryFood,
   replaceEntryWithCustomFood,
+  setGrouping,
   setLanguage,
   setTheme,
   updateCustomFood,
@@ -26,6 +27,7 @@ import {
   emptyState,
   type DomainError,
   type Food,
+  type LedgerGrouping,
   type PersistedState,
   type ThemeSetting,
 } from "../domain/types";
@@ -258,6 +260,11 @@ export function useTracker() {
     commit(setLanguage(stateRef.current, next));
   }
 
+  function chooseGrouping(grouping: LedgerGrouping) {
+    if (stateRef.current.settings.grouping === grouping) return;
+    commit(setGrouping(stateRef.current, grouping));
+  }
+
   function messages(): Copy {
     return copyFor(stateRef.current.settings.language);
   }
@@ -345,6 +352,8 @@ export function useTracker() {
     performUndo,
     cycleTheme,
     cycleLanguage,
+    chooseGrouping,
+    grouping: state.settings.grouping,
     theme,
     language,
     copy,

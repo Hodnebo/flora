@@ -41,7 +41,7 @@ The production build is a **PWA**: web app manifest plus a service worker for of
 
 ### Persistence
 
-All app data lives in `localStorage` under the key `flora.state`. The JSON includes `schemaVersion: 1`. Catalog foods ship with the app and are **not** copied into `localStorage`. Only custom foods, log entries, theme, and display language are stored. A save without `settings.language` still opens, and the language stays English.
+All app data lives in `localStorage` under the key `flora.state`. The JSON includes `schemaVersion: 1`. Catalog foods ship with the app and are **not** copied into `localStorage`. Only custom foods, log entries, theme, display language, and ledger grouping are stored. A save without `settings.language` still opens, and the language stays English. A save without `settings.grouping` opens grouped by day.
 
 A small storage adapter (`createStore`) wraps `getItem` / `setItem` so persistence can be swapped later. `migrate()` upgrades missing or older payloads to v1, drops invalid entries, and deduplicates the same food within a week. If `schemaVersion` is newer than this app understands, the app refuses to load and copies the raw payload to `flora.state.backup` instead of overwriting it.
 
