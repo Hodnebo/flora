@@ -6,6 +6,7 @@ import {
   removeEntry,
   replaceEntryFood,
   replaceEntryWithCustomFood,
+  setGrouping,
   setLanguage,
   setTheme,
   updateCustomFood,
@@ -239,5 +240,22 @@ describe("setLanguage", () => {
     expect(restored.settings.language).toBe("nb");
     expect(setLanguage(norwegian, "en").settings.language).toBe("en");
     expect(norwegian.settings.language).toBe("nb");
+  });
+});
+
+describe("setGrouping", () => {
+  it("round-trips the ledger grouping without dropping logged data", () => {
+    const logged = must(
+      logCustomFood(emptyState(), "Nettle pesto", "other", WEEK, NOW, {
+        foodId: "custom:pesto00001",
+        entryId: "e1",
+      }),
+    );
+    const byCategory = setGrouping(logged, "category");
+    expect(byCategory.settings.grouping).toBe("category");
+    expect(byCategory.entries).toEqual(logged.entries);
+    expect(byCategory.customFoods).toEqual(logged.customFoods);
+    expect(setGrouping(byCategory, "day").settings.grouping).toBe("day");
+    expect(byCategory.settings.grouping).toBe("category");
   });
 });

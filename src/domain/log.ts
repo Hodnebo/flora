@@ -7,6 +7,7 @@ import {
   ok,
   type Food,
   type LanguageSetting,
+  type LedgerGrouping,
   type PersistedState,
   type Result,
   type ThemeSetting,
@@ -169,6 +170,13 @@ export function setLanguage(state: PersistedState, language: LanguageSetting): P
   return {
     ...state,
     settings: { ...state.settings, language },
+  };
+}
+
+export function setGrouping(state: PersistedState, grouping: LedgerGrouping): PersistedState {
+  return {
+    ...state,
+    settings: { ...state.settings, grouping },
   };
 }
 

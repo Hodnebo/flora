@@ -26,6 +26,6 @@ There are no child nodes. The areas below are small enough to follow from this f
 
 - One plant identity per ISO week (local Monday–Sunday). Full point is 1; nut, seed, herb, and spice are 0.25. Goal is 30.
 - Scores are computed from the food’s current category. Do not store points on an entry.
-- Catalog foods ship in the bundle. Only custom foods, entries, theme, and language go in `flora.state` (`schemaVersion: 1`). Missing language reads as English.
+- Catalog foods ship in the bundle. Only custom foods, entries, theme, language, and ledger grouping go in `flora.state` (`schemaVersion: 1`). Missing language reads as English. Missing grouping reads as daily.
 - A newer `schemaVersion` is read-only: copy the raw payload to `flora.state.backup` and do not overwrite it.
 - Chili and bell pepper are different plants. Paprika is chili. Peanut is a legume (1). Cultivars collapse (shallot → onion, broccolini → broccoli). Olive oil is not a food.

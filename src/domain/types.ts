@@ -21,9 +21,12 @@ export type ThemeSetting = "system" | "light" | "dark";
 
 export type LanguageSetting = "en" | "nb";
 
+export type LedgerGrouping = "day" | "category";
+
 export interface Settings {
   theme: ThemeSetting;
   language: LanguageSetting;
+  grouping: LedgerGrouping;
 }
 
 export interface PersistedState {
@@ -59,6 +62,6 @@ export function emptyState(): PersistedState {
     schemaVersion: SCHEMA_VERSION,
     customFoods: [],
     entries: [],
-    settings: { theme: "system", language: "en" },
+    settings: { theme: "system", language: "en", grouping: "day" },
   };
 }

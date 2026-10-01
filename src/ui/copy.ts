@@ -24,6 +24,9 @@ export type Copy = {
   emptyPastTitle: string;
   emptyCurrentBody: string;
   weeklyScore: string;
+  groupPlants: string;
+  byDay: string;
+  byCategory: string;
   freshWeek: string;
   toThirty: (remaining: string) => string;
   toNext: (remaining: string, goal: number) => string;
@@ -100,6 +103,9 @@ const dictionary: Record<Language, Copy> = {
     emptyPastTitle: "Nothing logged this week.",
     emptyCurrentBody: "Fruit, grains, nuts, herbs, and spices all count. Each plant counts once.",
     weeklyScore: "Weekly score",
+    groupPlants: "Group plants",
+    byDay: "By day",
+    byCategory: "By category",
     freshWeek: "A fresh week.",
     toThirty: (remaining) => `${remaining} to thirty`,
     toNext: (remaining, goal) => `${remaining} to ${goal}`,
@@ -176,6 +182,9 @@ const dictionary: Record<Language, Copy> = {
     emptyCurrentBody:
       "Frukt, korn, nøtter, urter og krydder teller med. Hver plante teller én gang.",
     weeklyScore: "Ukespoeng",
+    groupPlants: "Grupper planter",
+    byDay: "Per dag",
+    byCategory: "Per kategori",
     freshWeek: "En ny uke.",
     toThirty: (remaining) => `${remaining} til tretti`,
     toNext: (remaining, goal) => `${remaining} til ${goal}`,

@@ -1,10 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type AnimationEvent,
+  type ReactNode,
+} from "react";
 import { WEEKLY_GOAL } from "../domain/category";
+import type { LedgerGrouping } from "../domain/types";
 import { formatPoints } from "../domain/format";
 import { parseWeekKey, weekRange } from "../domain/isoWeek";
 import { AddPlantDialog } from "./AddPlantDialog";
 import { EntryDialog } from "./EntryDialog";
-import { ChevronLeft, ChevronRight } from "./icons";
+import { groupLedgerByCategory, type LedgerSection } from "./groupLedger";
+import { CategoryIcon, ChevronLeft, ChevronRight } from "./icons";
 import {
   groupLedgerByDay,
   activeGoal,
@@ -12,6 +22,7 @@ import {
   localDayKey,
   stretchTier,
   type DayLedgerSection,
+  type ScoreBarLayout,
 } from "./weekDays";
 import { useTracker, type Tracker } from "./useTracker";
 
@@ -146,6 +157,14 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
     unknownPlantLabel: tracker.copy.unknownPlant,
     nameOf: tracker.nameOf,
   });
+  const categorySections = groupLedgerByCategory({
+    entries: tracker.entries,
+    foods: tracker.foods,
+    dateLocale: tracker.copy.dateLocale,
+    categoryLabels: tracker.copy.category,
+    unknownPlantLabel: tracker.copy.unknownPlant,
+    nameOf: tracker.nameOf,
+  });
 
   function closeAdd() {
     setAddOpen(false);
@@ -195,15 +214,31 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
           copy={tracker.copy}
           daySections={daySections}
           todayKey={tracker.isCurrentWeek ? localDayKey(new Date().toISOString()) : null}
+          deferMotion={addOpen}
         />
         {tracker.entries.length === 0 ? (
           <EmptyLedger current={tracker.isCurrentWeek} copy={tracker.copy} />
         ) : (
-          <div className="ledger">
-            {daySections.map((section) => (
-              <DayLedgerGroup key={section.dayKey} section={section} onOpen={openEntry} />
-            ))}
-          </div>
+          <>
+            <GroupingSwitch
+              grouping={tracker.grouping}
+              copy={tracker.copy}
+              onChange={tracker.chooseGrouping}
+            />
+            <div className="ledger">
+              {tracker.grouping === "category"
+                ? categorySections.map((section) => (
+                    <CategoryLedgerGroup
+                      key={section.kind === "category" ? section.category : "unknown"}
+                      section={section}
+                      onOpen={openEntry}
+                    />
+                  ))
+                : daySections.map((section) => (
+                    <DayLedgerGroup key={section.dayKey} section={section} onOpen={openEntry} />
+                  ))}
+            </div>
+          </>
         )}
       </main>
       <footer className="dock">
@@ -271,84 +306,181 @@ function Hero({
   copy,
   daySections,
   todayKey,
+  deferMotion,
 }: {
   score: number;
   weekKey: string;
   copy: Tracker["copy"];
   daySections: readonly DayLedgerSection[];
   todayKey: string | null;
+  deferMotion: boolean;
 }) {
   const caption = scoreCaption(score, copy);
   const stage = barStage(score);
   const layout = layoutScoreBar(daySections, todayKey);
   const valueNow = Math.min(Math.max(score, 0), layout.scaleMax);
-  const todaySegment = layout.segments.find((segment) => segment.kind === "today");
+  const todaySegmentLive = layout.segments.find((segment) => segment.kind === "today");
   const valueText = heroValueText(caption, todayKey, daySections, layout.todayCount);
-  const scoreRef = useRef<HTMLSpanElement>(null);
-  const barRef = useRef<HTMLDivElement>(null);
-  const previous = useRef({ score, weekKey, stage });
+  const todayCount = layout.todayCount ?? 0;
+  const todayWidth = todaySegmentLive?.widthPercent ?? 0;
+  const [motion, setMotion] = useState<HeroMotion>(() => ({
+    weekKey,
+    score,
+    stage,
+    todayCount,
+    todayWidth,
+    burst: 0,
+    grow: false,
+    wash: false,
+  }));
+  const [held, setHeld] = useState<HeldHero | null>(null);
+  if (deferMotion) {
+    if (held === null) {
+      setHeld({ score, caption, stage, layout, valueText, valueNow });
+    }
+  } else if (held !== null) {
+    setHeld(null);
+    setMotion(
+      advanceHeroMotion(motion, {
+        weekKey,
+        score,
+        stage,
+        todayCount,
+        todayWidth,
+        todayKey,
+      }),
+    );
+  } else if (
+    motion.weekKey !== weekKey ||
+    motion.score !== score ||
+    motion.stage !== stage ||
+    motion.todayCount !== todayCount ||
+    motion.todayWidth !== todayWidth
+  ) {
+    setMotion(
+      advanceHeroMotion(motion, {
+        weekKey,
+        score,
+        stage,
+        todayCount,
+        todayWidth,
+        todayKey,
+      }),
+    );
+  }
 
-  useEffect(() => {
-    const before = previous.current;
-    previous.current = { score, weekKey, stage };
-    if (before.weekKey !== weekKey) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const crossedGoal = stretchTier(score) > stretchTier(before.score);
-    if (crossedGoal) cheer(scoreRef.current, "score-arrive");
-    if (BAR_STAGE_RANK[stage] > BAR_STAGE_RANK[before.stage] || crossedGoal)
-      cheer(barRef.current, "bar-cheer");
-  }, [score, weekKey, stage]);
+  const viewScore = held?.score ?? score;
+  const viewCaption = held?.caption ?? caption;
+  const viewStage = held?.stage ?? stage;
+  const viewLayout = held?.layout ?? layout;
+  const viewValueText = held?.valueText ?? valueText;
+  const viewValueNow = held?.valueNow ?? valueNow;
+  const todaySegment = viewLayout.segments.find((segment) => segment.kind === "today");
+
+  const scoreRef = useRef<HTMLSpanElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const todayRef = useRef<HTMLSpanElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    if (motion.burst === 0) return;
+    if (motion.grow) {
+      replay(trackRef.current);
+      replay(todayRef.current);
+      replay(countRef.current);
+    }
+    if (motion.wash) replay(scoreRef.current);
+  }, [motion.burst, motion.grow, motion.wash]);
+
+  function clearGrow(event: AnimationEvent<HTMLDivElement>) {
+    if (event.animationName !== "track-bloom") return;
+    const burst = Number(event.currentTarget.dataset.burst);
+    setMotion((current) => (current.burst === burst ? { ...current, grow: false } : current));
+  }
+
+  function clearWash(event: AnimationEvent<HTMLSpanElement>) {
+    if (event.animationName !== "bar-wash") return;
+    const burst = Number(event.currentTarget.dataset.burst);
+    setMotion((current) => (current.burst === burst ? { ...current, wash: false } : current));
+  }
 
   const todayCenter = todaySegment ? todaySegment.leftPercent + todaySegment.widthPercent / 2 : 0;
   const todayAlign = todayCenter > 90 ? "end" : todayCenter < 10 ? "start" : "center";
 
   return (
-    <section className="hero" data-stage={stage} aria-live="polite" aria-atomic="true">
+    <section className="hero" data-stage={viewStage} aria-live="polite" aria-atomic="true">
       <p className="score-line">
-        <span ref={scoreRef} className="display score-num">
-          {formatPoints(score)}
+        <span
+          ref={scoreRef}
+          className={motion.wash ? "display score-num score-arrive" : "display score-num"}
+        >
+          {formatPoints(viewScore)}
         </span>
-        <span className="score-goal">/ {layout.scaleMax}</span>
+        <span className="score-goal">/ {viewLayout.scaleMax}</span>
       </p>
       <div className="bar-wrap">
-        {todaySegment && layout.todayCount !== null ? (
+        {todaySegment && viewLayout.todayCount !== null ? (
           <div className="bar-counts" aria-hidden="true">
             <span className="bar-count" data-align={todayAlign} style={{ left: `${todayCenter}%` }}>
-              +{layout.todayCount}
+              <span
+                ref={countRef}
+                className={motion.grow ? "bar-count-value bar-count-pop" : "bar-count-value"}
+              >
+                +{viewLayout.todayCount}
+              </span>
             </span>
           </div>
         ) : null}
         <div
-          className="track"
+          ref={trackRef}
+          className={motion.grow ? "track bar-bloom" : "track"}
+          data-motion={motion.grow ? "grow" : undefined}
+          data-burst={motion.burst}
           role="progressbar"
           aria-label={copy.weeklyScore}
           aria-valuemin={0}
-          aria-valuemax={layout.scaleMax}
-          aria-valuenow={valueNow}
-          aria-valuetext={valueText}
+          aria-valuemax={viewLayout.scaleMax}
+          aria-valuenow={viewValueNow}
+          aria-valuetext={viewValueText}
+          onAnimationEnd={clearGrow}
         >
-          <div ref={barRef} className="bar-segments">
-            {layout.segments.map((segment, index) => (
+          <div className="bar-segments">
+            {viewLayout.segments.map((segment, index) => (
               <span
                 key={`${segment.kind}-${index}`}
+                ref={segment.kind === "today" ? todayRef : undefined}
                 className={
                   segment.kind === "today"
-                    ? `bar-segment bar-today${segment.leftPercent > 0 ? " bar-today-join" : ""}`
+                    ? `bar-segment bar-today${segment.leftPercent > 0 ? " bar-today-join" : ""}${motion.grow ? " bar-pulse" : ""}`
                     : "bar-segment bar-base"
                 }
                 style={{
                   left: `${segment.leftPercent}%`,
                   width: `${segment.widthPercent}%`,
                 }}
-              />
+              >
+                {segment.kind === "today" && motion.grow ? (
+                  <span key={motion.burst} className="bar-comet" />
+                ) : null}
+              </span>
             ))}
           </div>
-          {layout.ticks.map((tick) => (
+          <div className="bar-fx" aria-hidden="true">
+            {motion.wash ? (
+              <span
+                key={motion.burst}
+                className="bar-wash"
+                data-burst={motion.burst}
+                onAnimationEnd={clearWash}
+              />
+            ) : null}
+          </div>
+          {viewLayout.ticks.map((tick) => (
             <span key={tick} className="tick" style={{ left: `${tick}%` }} aria-hidden="true" />
           ))}
         </div>
       </div>
-      <p className="caption">{caption}</p>
+      <p className="caption">{viewCaption}</p>
     </section>
   );
 }
@@ -369,6 +501,67 @@ function EmptyLedger({ current, copy }: { current: boolean; copy: Tracker["copy"
   );
 }
 
+function GroupingSwitch({
+  grouping,
+  copy,
+  onChange,
+}: {
+  grouping: LedgerGrouping;
+  copy: Tracker["copy"];
+  onChange: (grouping: LedgerGrouping) => void;
+}) {
+  return (
+    <div className="group-switch" role="radiogroup" aria-label={copy.groupPlants}>
+      <GroupOption
+        selected={grouping === "day"}
+        label={copy.byDay}
+        onSelect={() => onChange("day")}
+      />
+      <GroupOption
+        selected={grouping === "category"}
+        label={copy.byCategory}
+        onSelect={() => onChange("category")}
+      />
+    </div>
+  );
+}
+
+function GroupOption({
+  selected,
+  label,
+  onSelect,
+}: {
+  selected: boolean;
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      className="group-option"
+      aria-checked={selected}
+      tabIndex={selected ? 0 : -1}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const group = event.currentTarget.parentElement;
+        if (!(group instanceof HTMLElement)) return;
+        const options = [...group.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+        const index = options.indexOf(event.currentTarget);
+        if (index < 0) return;
+        const next = event.key === "ArrowRight" ? index + 1 : index - 1;
+        const target = options[(next + options.length) % options.length];
+        target?.focus();
+        target?.click();
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function DayLedgerGroup({
   section,
   onOpen,
@@ -376,13 +569,66 @@ function DayLedgerGroup({
   section: DayLedgerSection;
   onOpen: (entryId: string) => void;
 }) {
-  const { rows, label, count, dayKey, weekdayIndex } = section;
-  const id = `ledger-day-${dayKey}`;
+  return (
+    <LedgerGroup
+      id={`ledger-day-${section.dayKey}`}
+      label={section.label}
+      count={section.count}
+      mark={<span className="day-swatch" data-weekday={section.weekdayIndex} aria-hidden="true" />}
+      rows={section.rows}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function CategoryLedgerGroup({
+  section,
+  onOpen,
+}: {
+  section: LedgerSection;
+  onOpen: (entryId: string) => void;
+}) {
+  const id = section.kind === "category" ? `ledger-cat-${section.category}` : "ledger-cat-unknown";
+  return (
+    <LedgerGroup
+      id={id}
+      label={section.label}
+      count={section.rows.length}
+      mark={
+        section.kind === "category" ? (
+          <span className="section-icon">
+            <CategoryIcon category={section.category} />
+          </span>
+        ) : (
+          <span className="day-swatch section-unknown" aria-hidden="true" />
+        )
+      }
+      rows={section.rows}
+      onOpen={onOpen}
+    />
+  );
+}
+
+function LedgerGroup({
+  id,
+  label,
+  count,
+  mark,
+  rows,
+  onOpen,
+}: {
+  id: string;
+  label: string;
+  count: number;
+  mark: ReactNode;
+  rows: readonly { id: string; name: string; pointsLabel: string | null }[];
+  onOpen: (entryId: string) => void;
+}) {
   return (
     <section className="ledger-section" aria-labelledby={id}>
       <h2 id={id} className="section-label section-title">
         <span className="section-title-start">
-          <span className="day-swatch" data-weekday={weekdayIndex} aria-hidden="true" />
+          {mark}
           <span>{label}</span>
         </span>
         <span className="section-count">{count}</span>
@@ -405,6 +651,76 @@ function DayLedgerGroup({
 
 type BarStage = "early" | "ten" | "twenty" | "goal";
 
+type HeldHero = {
+  score: number;
+  caption: string;
+  stage: BarStage;
+  layout: ScoreBarLayout;
+  valueText: string;
+  valueNow: number;
+};
+
+type HeroMotion = {
+  weekKey: string;
+  score: number;
+  stage: BarStage;
+  todayCount: number;
+  todayWidth: number;
+  burst: number;
+  grow: boolean;
+  wash: boolean;
+};
+
+function advanceHeroMotion(
+  current: HeroMotion,
+  next: {
+    weekKey: string;
+    score: number;
+    stage: BarStage;
+    todayCount: number;
+    todayWidth: number;
+    todayKey: string | null;
+  },
+): HeroMotion {
+  if (current.weekKey !== next.weekKey) {
+    return {
+      weekKey: next.weekKey,
+      score: next.score,
+      stage: next.stage,
+      todayCount: next.todayCount,
+      todayWidth: next.todayWidth,
+      burst: current.burst,
+      grow: false,
+      wash: false,
+    };
+  }
+  const grew = next.score > current.score + 0.001;
+  const grewToday = next.todayWidth > current.todayWidth + 0.01;
+  const allow = grew && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const grow = allow && (next.todayKey === null || grewToday);
+  const wash =
+    allow &&
+    (BAR_STAGE_RANK[next.stage] > BAR_STAGE_RANK[current.stage] ||
+      stretchTier(next.score) > stretchTier(current.score));
+  return {
+    weekKey: next.weekKey,
+    score: next.score,
+    stage: next.stage,
+    todayCount: next.todayCount,
+    todayWidth: next.todayWidth,
+    burst: grow || wash ? current.burst + 1 : current.burst,
+    grow,
+    wash,
+  };
+}
+
+function replay(element: HTMLElement | null) {
+  if (!element) return;
+  element.style.animation = "none";
+  void element.offsetWidth;
+  element.style.animation = "";
+}
+
 const BAR_STAGE_RANK: Record<BarStage, number> = {
   early: 0,
   ten: 1,
@@ -417,15 +733,6 @@ function barStage(score: number): BarStage {
   if (score >= 20) return "twenty";
   if (score >= 10) return "ten";
   return "early";
-}
-
-function cheer(element: HTMLElement | null, className: string) {
-  if (!element) return;
-  element.classList.remove(className);
-  void element.offsetWidth;
-  element.classList.add(className);
-  const onEnd = () => element.classList.remove(className);
-  element.addEventListener("animationend", onEnd, { once: true });
 }
 
 function scoreCaption(score: number, copy: Tracker["copy"]): string {
