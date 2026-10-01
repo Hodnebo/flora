@@ -4,8 +4,15 @@ import { formatPoints } from "../domain/format";
 import { parseWeekKey, weekRange } from "../domain/isoWeek";
 import { AddPlantDialog } from "./AddPlantDialog";
 import { EntryDialog } from "./EntryDialog";
-import { groupLedgerByCategory, type LedgerSection } from "./groupLedger";
-import { CategoryIcon, ChevronLeft, ChevronRight } from "./icons";
+import { ChevronLeft, ChevronRight } from "./icons";
+import {
+  groupLedgerByDay,
+  activeGoal,
+  layoutScoreBar,
+  localDayKey,
+  stretchTier,
+  type DayLedgerSection,
+} from "./weekDays";
 import { useTracker, type Tracker } from "./useTracker";
 
 export function App() {
@@ -132,11 +139,10 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
   const activeFood = activeEntry ? (tracker.foods.get(activeEntry.foodId) ?? null) : null;
   const loggedFoodIds = new Set(tracker.entries.map((entry) => entry.foodId));
   const foodList = [...tracker.foods.values()];
-  const ledgerSections = groupLedgerByCategory({
+  const daySections = groupLedgerByDay({
     entries: tracker.entries,
     foods: tracker.foods,
     dateLocale: tracker.copy.dateLocale,
-    categoryLabels: tracker.copy.category,
     unknownPlantLabel: tracker.copy.unknownPlant,
     nameOf: tracker.nameOf,
   });
@@ -183,17 +189,19 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
             {tracker.saveError}
           </p>
         ) : null}
-        <Hero score={tracker.score} weekKey={tracker.weekKey} copy={tracker.copy} />
+        <Hero
+          score={tracker.score}
+          weekKey={tracker.weekKey}
+          copy={tracker.copy}
+          daySections={daySections}
+          todayKey={tracker.isCurrentWeek ? localDayKey(new Date().toISOString()) : null}
+        />
         {tracker.entries.length === 0 ? (
           <EmptyLedger current={tracker.isCurrentWeek} copy={tracker.copy} />
         ) : (
           <div className="ledger">
-            {ledgerSections.map((section) => (
-              <LedgerGroup
-                key={section.kind === "category" ? section.category : "unknown"}
-                section={section}
-                onOpen={openEntry}
-              />
+            {daySections.map((section) => (
+              <DayLedgerGroup key={section.dayKey} section={section} onOpen={openEntry} />
             ))}
           </div>
         )}
@@ -257,13 +265,27 @@ function WeekStage({ tracker, weekLabel }: { tracker: Tracker; weekLabel: string
   );
 }
 
-function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: Tracker["copy"] }) {
+function Hero({
+  score,
+  weekKey,
+  copy,
+  daySections,
+  todayKey,
+}: {
+  score: number;
+  weekKey: string;
+  copy: Tracker["copy"];
+  daySections: readonly DayLedgerSection[];
+  todayKey: string | null;
+}) {
   const caption = scoreCaption(score, copy);
   const stage = barStage(score);
-  const valueNow = Math.min(Math.max(score, 0), WEEKLY_GOAL);
-  const width = Math.min(100, Math.max(0, (score / WEEKLY_GOAL) * 100));
+  const layout = layoutScoreBar(daySections, todayKey);
+  const valueNow = Math.min(Math.max(score, 0), layout.scaleMax);
+  const todaySegment = layout.segments.find((segment) => segment.kind === "today");
+  const valueText = heroValueText(caption, todayKey, daySections, layout.todayCount);
   const scoreRef = useRef<HTMLSpanElement>(null);
-  const barRef = useRef<HTMLSpanElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
   const previous = useRef({ score, weekKey, stage });
 
   useEffect(() => {
@@ -271,9 +293,14 @@ function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: 
     previous.current = { score, weekKey, stage };
     if (before.weekKey !== weekKey) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    if (before.score < WEEKLY_GOAL && score >= WEEKLY_GOAL) cheer(scoreRef.current, "score-arrive");
-    if (BAR_STAGE_RANK[stage] > BAR_STAGE_RANK[before.stage]) cheer(barRef.current, "bar-cheer");
+    const crossedGoal = stretchTier(score) > stretchTier(before.score);
+    if (crossedGoal) cheer(scoreRef.current, "score-arrive");
+    if (BAR_STAGE_RANK[stage] > BAR_STAGE_RANK[before.stage] || crossedGoal)
+      cheer(barRef.current, "bar-cheer");
   }, [score, weekKey, stage]);
+
+  const todayCenter = todaySegment ? todaySegment.leftPercent + todaySegment.widthPercent / 2 : 0;
+  const todayAlign = todayCenter > 90 ? "end" : todayCenter < 10 ? "start" : "center";
 
   return (
     <section className="hero" data-stage={stage} aria-live="polite" aria-atomic="true">
@@ -281,20 +308,45 @@ function Hero({ score, weekKey, copy }: { score: number; weekKey: string; copy: 
         <span ref={scoreRef} className="display score-num">
           {formatPoints(score)}
         </span>
-        <span className="score-goal">/ {WEEKLY_GOAL}</span>
+        <span className="score-goal">/ {layout.scaleMax}</span>
       </p>
-      <div
-        className="track"
-        role="progressbar"
-        aria-label={copy.weeklyScore}
-        aria-valuemin={0}
-        aria-valuemax={WEEKLY_GOAL}
-        aria-valuenow={valueNow}
-        aria-valuetext={caption}
-      >
-        <span ref={barRef} className="bar-fill" style={{ width: `${width}%` }} />
-        <span className="tick" style={{ left: "33.333%" }} aria-hidden="true" />
-        <span className="tick" style={{ left: "66.666%" }} aria-hidden="true" />
+      <div className="bar-wrap">
+        {todaySegment && layout.todayCount !== null ? (
+          <div className="bar-counts" aria-hidden="true">
+            <span className="bar-count" data-align={todayAlign} style={{ left: `${todayCenter}%` }}>
+              +{layout.todayCount}
+            </span>
+          </div>
+        ) : null}
+        <div
+          className="track"
+          role="progressbar"
+          aria-label={copy.weeklyScore}
+          aria-valuemin={0}
+          aria-valuemax={layout.scaleMax}
+          aria-valuenow={valueNow}
+          aria-valuetext={valueText}
+        >
+          <div ref={barRef} className="bar-segments">
+            {layout.segments.map((segment, index) => (
+              <span
+                key={`${segment.kind}-${index}`}
+                className={
+                  segment.kind === "today"
+                    ? `bar-segment bar-today${segment.leftPercent > 0 ? " bar-today-join" : ""}`
+                    : "bar-segment bar-base"
+                }
+                style={{
+                  left: `${segment.leftPercent}%`,
+                  width: `${segment.widthPercent}%`,
+                }}
+              />
+            ))}
+          </div>
+          {layout.ticks.map((tick) => (
+            <span key={tick} className="tick" style={{ left: `${tick}%` }} aria-hidden="true" />
+          ))}
+        </div>
       </div>
       <p className="caption">{caption}</p>
     </section>
@@ -317,27 +369,23 @@ function EmptyLedger({ current, copy }: { current: boolean; copy: Tracker["copy"
   );
 }
 
-function LedgerGroup({
+function DayLedgerGroup({
   section,
   onOpen,
 }: {
-  section: LedgerSection;
+  section: DayLedgerSection;
   onOpen: (entryId: string) => void;
 }) {
-  const { rows, label } = section;
-  const id = section.kind === "category" ? `ledger-${section.category}` : "ledger-unknown";
+  const { rows, label, count, dayKey, weekdayIndex } = section;
+  const id = `ledger-day-${dayKey}`;
   return (
     <section className="ledger-section" aria-labelledby={id}>
       <h2 id={id} className="section-label section-title">
-        {section.kind === "category" ? (
-          <span className="section-title-start">
-            <CategoryIcon category={section.category} />
-            <span>{label}</span>
-          </span>
-        ) : (
+        <span className="section-title-start">
+          <span className="day-swatch" data-weekday={weekdayIndex} aria-hidden="true" />
           <span>{label}</span>
-        )}
-        <span className="section-count">{rows.length}</span>
+        </span>
+        <span className="section-count">{count}</span>
       </h2>
       <ul className="ledger-list">
         {rows.map((row) => (
@@ -383,8 +431,20 @@ function cheer(element: HTMLElement | null, className: string) {
 function scoreCaption(score: number, copy: Tracker["copy"]): string {
   if (score <= 0) return copy.freshWeek;
   if (score < WEEKLY_GOAL) return copy.toThirty(formatPoints(WEEKLY_GOAL - score));
-  if (score === WEEKLY_GOAL) return copy.thirtyExact;
-  return copy.pastThirty(formatPoints(score - WEEKLY_GOAL));
+  const next = activeGoal(score);
+  return copy.toNext(formatPoints(next - score), next);
+}
+
+function heroValueText(
+  caption: string,
+  todayKey: string | null,
+  daySections: readonly DayLedgerSection[],
+  todayCount: number | null,
+): string {
+  if (todayKey === null || todayCount === null) return caption;
+  const today = daySections.find((section) => section.dayKey === todayKey);
+  if (!today) return caption;
+  return `${caption}. ${today.label}, ${todayCount}`;
 }
 
 function formatWeekRange(weekKey: string, today: Date, locale: string): string {
